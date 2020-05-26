@@ -39,17 +39,18 @@ variable "droplet_size" {
 
 
 
-resource "digitalocean_vpc" "k8s-vpc" {
-  name     = "k8s-vpc"
+resource "digitalocean_vpc" "k8s-vpc1" {
+  name     = "k8s-vpc1"
   region   = "fra1"
 }
+
 
 resource "digitalocean_kubernetes_cluster" "k8s-cluster" {
   name    = "k8s-cluster"
   region  = "fra1"
   version = "1.17.5-do.0"
   tags    = ["development"]
-  vpc_uuid = digitalocean_vpc.k8s-vpc.id
+  vpc_uuid = digitalocean_vpc.k8s-vpc1.id
 
   node_pool {
     name       = "k8s-cluster-worker-pool"
@@ -61,10 +62,11 @@ resource "digitalocean_kubernetes_cluster" "k8s-cluster" {
   }
 }
 
+
 resource "digitalocean_loadbalancer" "k8s-load-balancer" {
   name = "k8s-load-balancer"
   region = "fra1"
-  vpc_uuid = digitalocean_vpc.k8s-vpc.id
+  vpc_uuid = digitalocean_vpc.k8s-vpc1.id
 
   forwarding_rule {
     entry_port = 80
@@ -82,14 +84,32 @@ resource "digitalocean_loadbalancer" "k8s-load-balancer" {
   droplet_ids = digitalocean_kubernetes_cluster.k8s-cluster.node_pool.0.nodes[*].droplet_id
 }
 
+
 resource "digitalocean_project" "k8s" {
   name        = "k8s"
-  description = "A scalable "
+  description = "An auto-scalable kubernetes cluster"
   purpose     = "Web Application"
   environment = "Development"
-  resources   = concat(
-    digitalocean_kubernetes_cluster.k8s-cluster.node_pool.0.nodes[*].droplet_id,
-    [digitalocean_loadbalancer.k8s-load-balancer.urn]
-    )
 }
+
+
+resource "digitalocean_project_resources" "k8s-resources" {
+  project = digitalocean_project.k8s.id
+#  resources   = concat(
+#    digitalocean_kubernetes_cluster.k8s-cluster.node_pool.0.nodes[*].droplet_id,
+#    [digitalocean_loadbalancer.k8s-load-balancer.urn]
+#    )
+  resources = [digitalocean_loadbalancer.k8s-load-balancer.urn]
+}
+
+output "k8s-resources-out-1" {
+    value = digitalocean_loadbalancer.k8s-load-balancer.urn
+}
+
+
+output "k8s-resources-out-2" {
+    value = digitalocean_kubernetes_cluster.k8s-cluster.node_pool.0.nodes[*]
+}
+
+
 
