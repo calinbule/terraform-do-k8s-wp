@@ -1,46 +1,12 @@
 
-variable do_token{}
-
-variable "min_cluster_nodes" {
-  type = number
-  default = 1
- }
-
-variable "max_cluster_nodes" {
-  type = number
-  default = 10
- }
-
-variable "droplet_size" {
-  type = string
-  default = "s-2vcpu-2gb"
- }
-
-
-
  data "digitalocean_ssh_key" "terraform-do" {
   name = "terraform-do" 
  }
 
 
 
- provider digitalocean{
-  token = var.do_token
-}
-
-#provider "kubernetes" {
-#  load_config_file = false
-#  host  = digitalocean_kubernetes_cluster.foo.endpoint
-#  token = digitalocean_kubernetes_cluster.foo.kube_config[0].token
-#  cluster_ca_certificate = base64decode(
-#    digitalocean_kubernetes_cluster.foo.kube_config[0].cluster_ca_certificate
-#  )
-#}
-
-
-
-resource "digitalocean_vpc" "k8s-vpc1" {
-  name     = "k8s-vpc1"
+resource "digitalocean_vpc" "k8s-vpc" {
+  name     = "k8s-vpc"
   region   = "fra1"
 }
 
@@ -50,15 +16,15 @@ resource "digitalocean_kubernetes_cluster" "k8s-cluster" {
   region  = "fra1"
   version = "1.17.5-do.0"
   tags    = ["development"]
-  vpc_uuid = digitalocean_vpc.k8s-vpc1.id
+  vpc_uuid = digitalocean_vpc.k8s-vpc.id
 
   node_pool {
     name       = "k8s-cluster-worker-pool"
-    size       = "s-1vcpu-2gb"
-    node_count = 3
+    size       = var.droplet_size
+    node_count = var.initial_node_count
     auto_scale = true
-    min_nodes  = 1
-    max_nodes  = 10
+    min_nodes  = var.min_cluster_nodes
+    max_nodes  = var.max_cluster_nodes
   }
 }
 
@@ -66,7 +32,7 @@ resource "digitalocean_kubernetes_cluster" "k8s-cluster" {
 resource "digitalocean_loadbalancer" "k8s-load-balancer" {
   name = "k8s-load-balancer"
   region = "fra1"
-  vpc_uuid = digitalocean_vpc.k8s-vpc1.id
+  vpc_uuid = digitalocean_vpc.k8s-vpc.id
 
   forwarding_rule {
     entry_port = 80
@@ -95,21 +61,30 @@ resource "digitalocean_project" "k8s" {
 
 resource "digitalocean_project_resources" "k8s-resources" {
   project = digitalocean_project.k8s.id
-#  resources   = concat(
-#    digitalocean_kubernetes_cluster.k8s-cluster.node_pool.0.nodes[*].droplet_id,
-#    [digitalocean_loadbalancer.k8s-load-balancer.urn]
-#    )
   resources = [digitalocean_loadbalancer.k8s-load-balancer.urn]
 }
 
+#resource "helm_release" "wordpress" {
+#  name  = "wordpress"
+#  chart = "bitnami/wordpress"
+#}
+
+
+
+
 output "k8s-resources-out-1" {
-    value = digitalocean_loadbalancer.k8s-load-balancer.urn
+    value = digitalocean_kubernetes_cluster.k8s-cluster.kube_config[0].cluster_ca_certificate
 }
 
 
 output "k8s-resources-out-2" {
-    value = digitalocean_kubernetes_cluster.k8s-cluster.node_pool.0.nodes[*]
+    value = digitalocean_kubernetes_cluster.k8s-cluster.kube_config[0]
 }
+
+
+#output "k8s-resources-out-1" {
+#    value = digitalocean_kubernetes_cluster.k8s-cluster.kube_config[0].cluster_ca_certificate
+#}
 
 
 
